@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>V-WORKFORCE — Vodafone Egypt</title>
+<style>
+  :root{
+    --red:#E60000; --red-dark:#B80000; --red-tint:#FDEBEB;
+    --ink:#242424; --ink2:#6B6B6B; --line:#E4E2E0; --paper:#F7F7F7; --white:#fff;
+    --green:#1F8A4C; --green-tint:#EAF6EF; --amber:#A66A00; --amber-tint:#FDF3E3;
+    --blue:#1E5FA8; --blue-tint:#EAF1FA;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--paper);color:var(--ink);}
+  button{font-family:inherit;cursor:pointer;}
+  input,select,textarea{font-family:inherit;}
+  a{cursor:pointer;}
+
+  /* ---------- Auth ---------- */
+  #authScreen{min-height:100vh;background:var(--ink);display:flex;align-items:center;justify-content:center;padding:20px;}
+  .auth-card{width:420px;max-width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35);}
+  .auth-head{background:var(--red);padding:22px 28px;display:flex;align-items:center;gap:10px;}
+  .auth-head .mark{width:30px;height:30px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--red);font-size:15px;}
+  .auth-head b{color:#fff;font-size:16px;display:block;}
+  .auth-head span{color:rgba(255,255,255,.85);font-size:11.5px;}
+  .auth-body{padding:28px;}
+  .auth-body h2{font-size:18px;margin:0 0 4px;}
+  .auth-body p.sub{font-size:13px;color:var(--ink2);margin:0 0 18px;}
+  .field{width:100%;box-sizing:border-box;padding:9px 11px;margin-bottom:12px;border:1px solid var(--line);border-radius:4px;font-size:13.5px;background:#fff;color:var(--ink);}
+  .field.pwwrap{position:relative;}
+  .showpw{position:absolute;right:8px;top:7px;background:none;border:none;color:var(--red);font-size:11.5px;font-weight:600;}
+  label.lbl{display:block;font-size:12px;font-weight:600;margin-bottom:4px;}
+  .hint{font-size:11.5px;color:var(--ink2);margin-top:-8px;margin-bottom:12px;}
+  .err{background:var(--red-tint);color:var(--red-dark);font-size:12.5px;padding:8px 10px;border-radius:4px;margin-bottom:12px;}
+  .pwreqs{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:6px 0 12px;font-size:11.5px;}
+  .pwreqs .ok{color:var(--green);} .pwreqs .no{color:var(--ink2);}
+  .btn-primary{width:100%;background:var(--red);color:#fff;border:none;padding:11px;border-radius:4px;font-weight:700;font-size:14px;}
+  .switchrow{text-align:center;font-size:12.5px;color:var(--ink2);margin-top:14px;}
+  .switchrow a{color:var(--red);font-weight:600;}
+  .tabs{display:flex;border-bottom:1px solid var(--line);margin-bottom:18px;}
+  .tabs button{flex:1;background:none;border:none;padding:10px;font-size:13px;font-weight:600;color:var(--ink2);border-bottom:2px solid transparent;}
+  .tabs button.active{color:var(--red);border-bottom-color:var(--red);}
+
+  /* ---------- App shell ---------- */
+  #app{min-height:100vh;position:relative;}
+  .watermark{position:fixed;bottom:14px;right:18px;opacity:.3;display:flex;align-items:center;gap:6px;z-index:5;pointer-events:none;}
+  .watermark .dot{width:16px;height:16px;border-radius:50%;background:var(--red);}
+  .watermark span{font-size:11px;font-weight:700;}
+  .topbar{height:56px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:20;}
+  .topbar .brand{display:flex;align-items:center;gap:10px;}
+  .topbar .brand .mark{width:26px;height:26px;border-radius:50%;background:var(--red);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:13px;}
+  .topbar .brand b{font-size:14.5px;}
+  .topbar .brand .clock{font-size:11.5px;color:var(--ink2);margin-left:4px;}
+  .topbar .right{display:flex;align-items:center;gap:14px;position:relative;}
+  .iconbtn{background:none;border:none;font-size:16px;padding:6px 8px;border-radius:5px;position:relative;}
+  .iconbtn .dot{position:absolute;top:0;right:0;background:var(--red);color:#fff;font-size:9.5px;font-weight:700;border-radius:10px;min-width:15px;height:15px;display:flex;align-items:center;justify-content:center;padding:0 3px;}
+  .avatar{width:26px;height:26px;border-radius:50%;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;}
+  .userbtn{display:flex;align-items:center;gap:8px;background:none;border:none;font-size:13px;font-weight:600;}
+  .panel-pop{position:absolute;top:42px;right:0;width:300px;background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:0 12px 32px rgba(0,0,0,.14);z-index:30;text-align:left;}
+  .panel-pop .ph{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;}
+  .panel-pop .pb{padding:14px;max-height:340px;overflow-y:auto;}
+  .notif-item{padding:10px 14px;border-bottom:1px solid var(--line);cursor:pointer;font-size:12.5px;}
+  .notif-item.unread{background:var(--red-tint);}
+  .notif-item .ts{font-size:10.5px;color:var(--ink2);margin-top:3px;}
+
+  .shell{display:flex;}
+  .sidebar{width:216px;background:#fff;border-right:1px solid var(--line);min-height:calc(100vh - 56px);padding:16px 10px;}
+  .sidebar .grouplabel{font-size:11px;font-weight:700;color:var(--ink2);padding:4px 10px 10px;}
+  .navitem{display:block;width:100%;text-align:left;padding:9px 12px;margin-bottom:2px;border:none;border-radius:5px;font-size:13.5px;font-weight:500;background:transparent;color:var(--ink);}
+  .navitem.active{background:var(--red-tint);color:var(--red);font-weight:700;}
+  .main{flex:1;padding:24px 28px;max-width:1200px;}
+
+  h1.pagetitle{font-size:20px;margin:0 0 4px;}
+  p.pagedesc{font-size:13px;color:var(--ink2);margin:0 0 18px;}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:26px;}
+  .kpi{text-align:left;background:#fff;border:1px solid var(--line);border-left:3px solid var(--ink);border-radius:6px;padding:14px 16px;cursor:pointer;}
+  .kpi.good{border-left-color:var(--green);} .kpi.warn{border-left-color:var(--amber);} .kpi.bad{border-left-color:var(--red);}
+  .kpi .l{font-size:11.5px;color:var(--ink2);margin-bottom:6px;}
+  .kpi .v{font-size:22px;font-weight:700;}
+
+  .card{background:#fff;border:1px solid var(--line);border-radius:6px;padding:16px;margin-bottom:12px;}
+  .card.clickable{cursor:pointer;}
+  .empty{padding:30px;text-align:center;color:var(--ink2);font-size:13px;background:#fff;border:1px dashed var(--line);border-radius:6px;}
+  .pill{display:inline-block;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:4px;}
+  .pill.good{background:var(--green-tint);color:var(--green);}
+  .pill.warn{background:var(--amber-tint);color:var(--amber);}
+  .pill.bad{background:var(--red-tint);color:var(--red-dark);}
+  .pill.grey{background:#EFEFEF;color:#555;}
+  .pill.blue{background:var(--blue-tint);color:var(--blue);}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th{text-align:left;font-size:11.5px;color:var(--ink2);font-weight:700;padding:10px 16px;border-bottom:1px solid var(--line);}
+  td{padding:11px 16px;border-bottom:1px solid var(--line);}
+  tr.rowlink{cursor:pointer;}
+  tr.rowlink:hover{background:var(--paper);}
+
+  .toolbar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;}
+  .toolbar .grow{flex:1;}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:50;}
+  .modal{background:#fff;border-radius:8px;width:440px;max-width:90vw;max-height:85vh;overflow-y:auto;padding:22px;}
+  .modal h3{margin:0 0 14px;font-size:16px;display:flex;justify-content:space-between;align-items:center;}
+  .modal h3 .x{background:none;border:none;font-size:18px;color:var(--ink2);}
+
+  .tabsrow{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;}
+  .tabsrow button{padding:8px 14px;border-radius:4px;border:1px solid var(--line);background:#fff;color:var(--ink);font-size:13px;font-weight:600;}
+  .tabsrow button.active{background:var(--red);border-color:var(--red);color:#fff;}
+
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 20px;border-radius:6px;font-size:13.5px;z-index:100;box-shadow:0 8px 24px rgba(0,0,0,.3);}
+  .toast.err{background:var(--red-dark);}
+  .toast.ok{background:var(--green);}
+
+  @media(max-width:800px){
+    .shell{flex-direction:column;}
+    .sidebar{width:100%;min-height:auto;display:flex;overflow-x:auto;gap:4px;}
+    .navitem{white-space:nowrap;}
+  }
+</style>
+</head>
+<body>
+
+<div id="authScreen"></div>
+<div id="app" style="display:none;"></div>
+<div id="toastHost"></div>
+
+<script>
+/* ============================================================
+   V-WORKFORCE — Vodafone Egypt Headcount Management
+   Fully static, client-side app. Data persists in this browser
+   via localStorage, so signup/login/requests/approvals genuinely
+   save between visits on the same device/browser.
+   ============================================================ */
+
+const LS_KEY = "vworkforce_state_v1";
+
+const DEPARTMENTS = [
+  { id:"d1", name:"Retail Operations", bu:"Commercial" },
+  { id:"d2", name:"Customer Care", bu:"Commercial" },
+  { id:"d3", name:"Network Engineering", bu:"Technology" },
+  { id:"d4", name:"Finance", bu:"Corporate" },
+  { id:"d5", name:"IT Services", bu:"Technology" },
+];
+const LOCATIONS = ["Cairo HQ","Alexandria","Giza","Mansoura","Assiut"];
+const JOB_TITLES = ["Retail Associate","Store Manager","Care Specialist","Network Engineer","Financial Analyst","IT Support Analyst"];
+const REQUEST_TYPES = ["Recruitment","Transfer","Promotion","IT Access","Benefits"];
+
+function uid(prefix){ return prefix + Math.random().toString(36).slice(2,9); }
+function nowStamp(){
+  return new Date().toLocaleString("en-GB",{timeZone:"Africa/Cairo",hour12:false}) + " EET";
+}
+function validateEmail(email){ return /^[a-z0-9._%+-]+@vodafone\.eg$/i.test((email||"").trim()); }
+function validatePassword(pw){
+  pw = pw||"";
+  return {
+    length: pw.length>=8, upper:/[A-Z]/.test(pw), lower:/[a-z]/.test(pw),
+    number:/[0-9]/.test(pw), symbol:/[^A-Za-z0-9]/.test(pw)
+  };
+}
+function passwordOk(pw){ return Object.values(validatePassword(pw)).every(Boolean); }
+function esc(s){ return (s==null?"":String(s)).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ---------------- State ---------------- */
+function seedEmployees(){
+  const names = ["Ahmed Hassan","Sara Mostafa","Omar Khaled","Nour El-Din","Laila Farouk",
+    "Tarek Aziz","Rana Adel","Hesham Nabil","Yasmin Tarek","Amr Salah",
+    "Heba Mahmoud","Fady George","Salma Reda","Mostafa Ali","Nadia Ezzat"];
+  return names.map((name,i)=>{
+    const dept = DEPARTMENTS[i % DEPARTMENTS.length];
+    const status = i % 9 === 0 ? "On Leave" : "Active";
+    return {
+      id:"e"+i, empId:"VF-"+(1000+i), name, email:name.toLowerCase().replace(" ",".")+"@vodafone.eg",
+      jobTitle: JOB_TITLES[i % JOB_TITLES.length], department: dept.name, departmentId: dept.id,
+      businessUnit: dept.bu, location: LOCATIONS[i % LOCATIONS.length], status,
+      joinDate: `${2019+(i%6)}-0${(i%9)+1}-1${i%2}`
+    };
+  });
+}
+
+function defaultState(){
+  return {
+    accounts: [],       // {id,name,email,password,role,phone,departmentId}
+    employees: seedEmployees(),
+    requests: [],        // {id,requesterId,requesterName,approverId,requestType,departmentId,department,priority,status,createdAt,updatedAt,comments,rejectionReason}
+    notifications: [],   // {id,userId,message,requestId,read,timestamp}
+    auditLog: [],
+    currentUserId: null,
+  };
+}
+
+let state = loadState();
+function loadState(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return defaultState();
+}
+function saveState(){
+  localStorage.setItem(LS_KEY, JSON.stringify(state));
+}
+function currentUser(){
+  return state.accounts.find(a=>a.id===state.currentUserId) || null;
+}
+function addAudit(action, recordType, extra){
+  const u = currentUser();
+  state.auditLog.unshift({ id:uid("a"), timestamp:nowStamp(), user:u?u.name:"System", role:u?u.role:"-", action, recordType, ...(extra||{}) });
+}
+function notify(userId, message, requestId){
+  state.notifications.unshift({ id:uid("n"), userId, message, requestId, read:false, timestamp:nowStamp() });
+}
+function toast(msg, kind){
+  const host = document.getElementById("toastHost");
+  const el = document.createElement("div");
+  el.className = "toast" + (kind ? " "+kind : "");
+  el.textContent = msg;
+  host.appendChild(el);
+  setTimeout(()=>el.remove(), 3200);
+}
+
+/* ---------------- Router / UI state ---------------- */
+let ui = {
+  authMode: "signin", // signin | signup
+  tab: "overview",
+  openRequestId: null,
+  showNotifs: false,
+  showProfile: false,
+  reasonModal: null,
+  modal: null, // {type, data}
+  requestsTab: null,
+  directorySearch: "", directoryDept:"All", directoryStatus:"All",
+  headcountYear: 2026, headcountOpenDept: null,
+};
+
+function render(){
+  saveState();
+  const u = currentUser();
+  if(!u){
+    document.getElementById("authScreen").style.display="flex";
+    document.getElementById("app").style.display="none";
+    renderAuth();
+  } else {
+    document.getElementById("authScreen").style.display="none";
+    document.getElementById("app").style.display="block";
+    renderApp();
+  }
+}
+
+/* ---------------- Auth screen ---------------- */
+let authForm = { name:"", email:"", password:"", confirm:"", role:"HR" };
+let authError = "";
+
+function renderAuth(){
+  const host = document.getElementById("authScreen");
+  const pw = validatePassword(authForm.password);
+  if(ui.authMode==="signup"){
+    host.innerHTML = `
+      <div class="auth-card">
+        <div class="auth-head">
+          <div class="mark">V</div>
+          <div><b>V-WORKFORCE</b><span>Vodafone Egypt · Headcount Management</span></div>
+        </div>
+        <div class="auth-body">
+          <div class="tabs">
+            <button onclick="ui.authMode='signin';authError='';render()">Sign in</button>
+            <button class="active">Create account</button>
+          </div>
+          <h2>Create your account</h2>
+          <p class="sub">Your role is set at sign-up and can't be changed afterward.</p>
+          <label class="lbl">Full name</label>
+          <input class="field" id="f_name" value="${esc(authForm.name)}" placeholder="Ahmed Hassan" oninput="authForm.name=this.value">
+          <label class="lbl">Corporate email</label>
+          <input class="field" id="f_email" value="${esc(authForm.email)}" placeholder="ahmed.hassan@vodafone.eg" oninput="authForm.email=this.value">
+          <div class="hint">Format: name@vodafone.eg</div>
+          <label class="lbl">Role</label>
+          <select class="field" id="f_role" onchange="authForm.role=this.value">
+            <option value="HR" ${authForm.role==="HR"?"selected":""}>HR</option>
+            <option value="Manager" ${authForm.role==="Manager"?"selected":""}>Manager</option>
+            <option value="Admin" ${authForm.role==="Admin"?"selected":""}>Administrator</option>
+          </select>
+          <label class="lbl">Password</label>
+          <div class="field pwwrap" style="padding:0;border:none;">
+            <input class="field" type="${authForm._show?'text':'password'}" style="margin-bottom:0;" value="${esc(authForm.password)}" oninput="authForm.password=this.value;renderAuth()">
+            <button class="showpw" onclick="authForm._show=!authForm._show;renderAuth()">${authForm._show?'Hide':'Show'}</button>
+          </div>
+          <div class="pwreqs">
+            <div class="${pw.length?'ok':'no'}">${pw.length?'✓':'○'} 8+ characters</div>
+            <div class="${pw.upper?'ok':'no'}">${pw.upper?'✓':'○'} Uppercase letter</div>
+            <div class="${pw.lower?'ok':'no'}">${pw.lower?'✓':'○'} Lowercase letter</div>
+            <div class="${pw.number?'ok':'no'}">${pw.number?'✓':'○'} Number</div>
+            <div class="${pw.symbol?'ok':'no'}">${pw.symbol?'✓':'○'} Symbol</div>
+          </div>
+          <label class="lbl">Confirm password</label>
+          <input class="field" type="${authForm._show?'text':'password'}" value="${esc(authForm.confirm)}" oninput="authForm.confirm=this.value">
+          ${authError?`<div class="err">${esc(authError)}</div>`:""}
+          <button class="btn-primary" onclick="handleSignup()">Create account</button>
+          <div class="switchrow">Already have an account? <a onclick="ui.authMode='signin';authError='';render()">Sign in</a></div>
+        </div>
+      </div>`;
+  } else {
+    host.innerHTML = `
+      <div class="auth-card">
+        <div class="auth-head">
+          <div class="mark">V</div>
+          <div><b>V-WORKFORCE</b><span>Vodafone Egypt · Headcount Management</span></div>
+        </div>
+        <div class="auth-body">
+          <div class="tabs">
+            <button class="active">Sign in</button>
+            <button onclick="ui.authMode='signup';authError='';render()">Create account</button>
+          </div>
+          <h2>Sign in</h2>
+          <p class="sub">Use your Vodafone corporate email.</p>
+          <label class="lbl">Corporate email</label>
+          <input class="field" value="${esc(authForm.email)}" placeholder="ahmed.hassan@vodafone.eg" oninput="authForm.email=this.value">
+          <label class="lbl">Password</label>
+          <div class="field pwwrap" style="padding:0;border:none;">
+            <input class="field" type="${authForm._show?'text':'password'}" style="margin-bottom:0;" value="${esc(authForm.password)}" oninput="authForm.password=this.value" onkeydown="if(event.key==='Enter')handleSignin()">
+            <button class="showpw" onclick="authForm._show=!authForm._show;renderAuth()">${authForm._show?'Hide':'Show'}</button>
+          </div>
+          ${authError?`<div class="err">${esc(authError)}</div>`:""}
+          <button class="btn-primary" onclick="handleSignin()">Sign in</button>
+          <div class="switchrow">New here? <a onclick="ui.authMode='signup';authError='';render()">Create an account</a></div>
+          <div style="font-size:11.5px;color:var(--ink2);margin-top:14px;border-top:1px solid var(--line);padding-top:12px;">
+            No account yet? Sign up first — accounts are saved in this browser.
+          </div>
+        </div>
+      </div>`;
+  }
+}
+
+function handleSignup(){
+  authError = "";
+  if(!authForm.name.trim()){ authError="Enter your full name."; return renderAuth(); }
+  if(!validateEmail(authForm.email)){ authError="Email must end with @vodafone.eg"; return renderAuth(); }
+  if(state.accounts.some(a=>a.email.toLowerCase()===authForm.email.toLowerCase())){ authError="An account with this email already exists."; return renderAuth(); }
+  if(!passwordOk(authForm.password)){ authError="Password doesn't meet the requirements above."; return renderAuth(); }
+  if(authForm.password!==authForm.confirm){ authError="Passwords do not match."; return renderAuth(); }
+  const newUser = {
+    id: uid("u"), name: authForm.name.trim(), email: authForm.email.toLowerCase(),
+    password: authForm.password, role: authForm.role, phone:"",
+    departmentId: authForm.role==="Manager" ? DEPARTMENTS[state.accounts.filter(a=>a.role==="Manager").length % DEPARTMENTS.length].id : null,
+  };
+  state.accounts.push(newUser);
+  state.currentUserId = newUser.id;
+  authForm = { name:"", email:"", password:"", confirm:"", role:"HR" };
+  addAudit(`Account created (${newUser.role})`, "Account", {});
+  render();
+  toast("Account created. Welcome, "+newUser.name.split(" ")[0]+".", "ok");
+}
+function handleSignin(){
+  authError = "";
+  const acc = state.accounts.find(a=>a.email.toLowerCase()===authForm.email.toLowerCase());
+  if(!acc || acc.password!==authForm.password){ authError="Incorrect email or password."; return renderAuth(); }
+  state.currentUserId = acc.id;
+  authForm = { name:"", email:"", password:"", confirm:"", role:"HR" };
+  render();
+}
+function handleSignOut(){
+  state.currentUserId = null;
+  ui.tab = "overview"; ui.showProfile=false; ui.showNotifs=false;
+  render();
+}
+
+/* ---------------- Main App shell ---------------- */
+const NAV_BY_ROLE = {
+  HR: ["overview","headcount","directory","requests","audit","profile"],
+  Manager: ["overview","headcount","directory","requests","profile"],
+  Admin: ["overview","headcount","directory","requests","audit","admin","profile"],
+};
+const NAV_LABELS = {
+  overview:"Overview", headcount:"Headcount Planning", directory:"People Directory",
+  requests:"Requests & Approvals", audit:"Audit Log", admin:"Administration", profile:"My Profile"
+};
+
+function renderApp(){
+  const u = currentUser();
+  const nav = NAV_BY_ROLE[u.role] || NAV_BY_ROLE.HR;
+  const myNotifs = state.notifications.filter(n=>n.userId===u.id);
+  const unread = myNotifs.filter(n=>!n.read);
+
+  const host = document.getElementById("app");
+  host.innerHTML = `
+    <div class="watermark"><div class="dot"></div><span>vodafone</span></div>
+    <div class="topbar">
+      <div class="brand">
+        <div class="mark">V</div><b>V-WORKFORCE</b>
+        <div class="clock">${nowStamp()}</div>
+      </div>
+      <div class="right">
+        <div style="position:relative;">
+          <button class="iconbtn" onclick="ui.showNotifs=!ui.showNotifs;ui.showProfile=false;render()">🔔${unread.length?`<span class="dot">${unread.length}</span>`:""}</button>
+          ${ui.showNotifs ? renderNotifPanel(myNotifs) : ""}
+        </div>
+        <div style="position:relative;">
+          <button class="userbtn" onclick="ui.showProfile=!ui.showProfile;ui.showNotifs=false;render()">
+            <span class="avatar">${initials(u.name)}</span> ${esc(u.name.split(" ")[0])}
+          </button>
+          ${ui.showProfile ? renderProfilePanel(u) : ""}
+        </div>
+      </div>
+    </div>
+    <div class="shell">
+      <div class="sidebar">
+        <div class="grouplabel">${esc(u.role.toUpperCase())} WORKSPACE</div>
+        ${nav.map(k=>`<button class="navitem ${ui.tab===k?'active':''}" onclick="ui.tab='${k}';ui.openRequestId=null;render()">${NAV_LABELS[k]}</button>`).join("")}
+      </div>
+      <div class="main" id="mainContent"></div>
+    </div>
+    ${ui.modal ? renderModal() : ""}
+  `;
+
+  const main = document.getElementById("mainContent");
+  if(ui.tab==="overview") main.innerHTML = renderOverview(u);
+  else if(ui.tab==="headcount") main.innerHTML = renderHeadcount(u);
+  else if(ui.tab==="directory") main.innerHTML = renderDirectory(u);
+  else if(ui.tab==="requests") main.innerHTML = renderRequests(u);
+  else if(ui.tab==="audit") main.innerHTML = renderAuditLog(u);
+  else if(ui.tab==="admin") main.innerHTML = renderAdmin(u);
+  else if(ui.tab==="profile") main.innerHTML = renderProfilePage(u);
+}
+function initials(name){ return name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase(); }
+
+function renderNotifPanel(list){
+  return `
+    <div class="panel-pop" style="width:320px;">
+      <div class="ph"><b style="font-size:13px;">Notifications</b>
+        <button onclick="state.notifications.forEach(n=>{if(n.userId===currentUser().id)n.read=true});render()" style="background:none;border:none;color:var(--red);font-size:11.5px;font-weight:600;">Mark all read</button>
+      </div>
+      <div class="pb" style="padding:0;">
+        ${list.length===0?'<div style="padding:18px;font-size:12.5px;color:var(--ink2);">No notifications yet.</div>':
+          list.map(n=>`
+            <div class="notif-item ${n.read?'':'unread'}" onclick="openNotif('${n.id}')">
+              <div>${esc(n.message)}</div>
+              <div class="ts">${esc(n.timestamp)}</div>
+            </div>`).join("")}
+      </div>
+    </div>`;
+}
+function openNotif(id){
+  const n = state.notifications.find(x=>x.id===id);
+  if(!n) return;
+  n.read = true;
+  ui.showNotifs = false;
+  if(n.requestId){ ui.tab="requests"; ui.openRequestId=n.requestId; }
+  render();
+}
+
+function renderProfilePanel(u){
+  return `
+    <div class="panel-pop">
+      <div style="padding:14px;border-bottom:1px solid var(--line);">
+        <div style="font-weight:700;font-size:13.5px;">${esc(u.name)}</div>
+        <div style="font-size:11.5px;color:var(--ink2);">${esc(u.email)}</div>
+        <div style="font-size:11px;color:var(--red);font-weight:700;margin-top:3px;">${esc(u.role)}</div>
+      </div>
+      <div style="padding:14px;">
+        <button class="btn-primary" style="margin-bottom:8px;" onclick="ui.tab='profile';ui.showProfile=false;render()">Edit profile</button>
+        <button class="btn-primary" style="background:var(--red);" onclick="handleSignOut()">Sign out</button>
+      </div>
+    </div>`;
+}
+
+/* ---------------- Overview ---------------- */
+function kpi(label,value,tone,onclick){
+  return `<button class="kpi ${tone||''}" onclick="${onclick||''}"><div class="l">${esc(label)}</div><div class="v">${esc(value)}</div></button>`;
+}
+function renderOverview(u){
+  const scoped = u.role==="Manager" ? state.employees.filter(e=>e.departmentId===u.departmentId) : state.employees;
+  const active = scoped.filter(e=>e.status==="Active").length;
+  const openPositions = Math.max(3, Math.round(scoped.length*0.08));
+  const pendingApprovals = state.requests.filter(r=>r.approverId===u.id && r.status==="PENDING_APPROVAL");
+  const myRequests = state.requests.filter(r=>r.requesterId===u.id);
+
+  let html = `
+    <h1 class="pagetitle">${esc(u.role)} Overview</h1>
+    <p class="pagedesc">Live snapshot based on current workforce and request data.</p>
+    <div class="kpis">
+      ${kpi("Total Employees", scoped.length, "", "ui.tab='directory';render()")}
+      ${kpi("Active Employees", active, "good", "ui.tab='directory';render()")}
+      ${kpi("Open Positions", openPositions, "warn", "ui.tab='headcount';render()")}
+      ${u.role==="Manager" ? kpi("Awaiting My Approval", pendingApprovals.length, "bad", "ui.tab='requests';render()")
+        : kpi("My Submitted Requests", myRequests.length, "", "ui.tab='requests';render()")}
+    </div>`;
+
+  if(u.role==="Manager"){
+    html += `<h3 style="font-size:14.5px;margin-bottom:10px;">Requests awaiting your approval</h3>`;
+    html += pendingApprovals.length===0 ? `<div class="empty">Nothing pending — you're all caught up.</div>` :
+      pendingApprovals.map(r=>`
+        <div class="card clickable" onclick="ui.tab='requests';ui.openRequestId='${r.id}';render()">
+          <div style="display:flex;justify-content:space-between;">
+            <div><b>${esc(r.id)} · ${esc(r.requestType)}</b><div style="font-size:12px;color:var(--ink2);">From ${esc(r.requesterName)} · ${esc(r.department)}</div></div>
+            ${statusPill(r.status)}
+          </div>
+        </div>`).join("");
+  } else {
+    html += `<h3 style="font-size:14.5px;margin-bottom:10px;">My recent requests</h3>`;
+    html += myRequests.length===0 ? `<div class="empty">You haven't submitted any requests yet. Go to Headcount Planning to create one.</div>` :
+      myRequests.slice(0,6).map(r=>`
+        <div class="card clickable" onclick="ui.tab='requests';ui.openRequestId='${r.id}';render()">
+          <div style="display:flex;justify-content:space-between;">
+            <div><b>${esc(r.id)} · ${esc(r.requestType)}</b><div style="font-size:12px;color:var(--ink2);">${esc(r.department)}</div></div>
+            ${statusPill(r.status)}
+          </div>
+        </div>`).join("");
+  }
+  return html;
+}
+
+function statusPill(status){
+  const map = { DRAFT:["grey","DRAFT"], PENDING_APPROVAL:["warn","PENDING APPROVAL"], APPROVED:["good","APPROVED"],
+    REJECTED:["bad","REJECTED"], SENT_BACK:["blue","SENT BACK"] };
+  const [tone,label] = map[status] || ["grey",status];
+  return `<span class="pill ${tone}">${label}</span>`;
+}
+
+/* ---------------- Headcount Planning ---------------- */
+function renderHeadcount(u){
+  const years = [2024,2025,2026];
+  const visibleDepts = u.role==="Manager" ? DEPARTMENTS.filter(d=>d.id===u.departmentId) : DEPARTMENTS;
+  const rows = visibleDepts.map(d=>{
+    const current = state.employees.filter(e=>e.departmentId===d.id && e.status==="Active").length;
+    const yearFactor = 1 + (ui.headcountYear-2024)*0.05;
+    const approved = Math.round((current+3)*yearFactor);
+    const gap = approved-current;
+    const status = gap>3?"Shortage":gap>0?"At Risk":gap<-1?"Over Capacity":"Healthy";
+    const tone = {Healthy:"good",  "At Risk":"warn", Shortage:"bad", "Over Capacity":"warn"}[status];
+    return {...d, current, approved, gap, status, tone};
+  });
+
+  let html = `
+    <h1 class="pagetitle">Headcount Planning</h1>
+    <p class="pagedesc">Compare approved capacity against current headcount by department and year.</p>
+    <div class="toolbar">
+      <span style="font-size:12.5px;color:var(--ink2);">Year</span>
+      ${years.map(y=>`<button class="tabsrow" style="display:inline-block;" onclick="ui.headcountYear=${y};render()"></button>`).join("")}
+    </div>
+    <div class="tabsrow">
+      ${years.map(y=>`<button class="${ui.headcountYear===y?'active':''}" onclick="ui.headcountYear=${y};render()">${y}</button>`).join("")}
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table>
+        <tr><th>Department</th><th>Approved</th><th>Current</th><th>Gap</th><th>Status</th></tr>
+        ${rows.map(r=>`
+          <tr class="rowlink" onclick="ui.headcountOpenDept='${r.id}';openHeadcountModal('${r.id}')">
+            <td><b>${esc(r.name)}</b></td><td>${r.approved}</td><td>${r.current}</td>
+            <td style="color:${r.gap>0?'var(--red)':'var(--green)'};font-weight:600;">${r.gap>0?'+':''}${r.gap}</td>
+            <td><span class="pill ${r.tone}">${r.status}</span></td>
+          </tr>`).join("")}
+      </table>
+    </div>`;
+  window._hcRows = rows;
+  return html;
+}
+function openHeadcountModal(deptId){
+  const r = (window._hcRows||[]).find(x=>x.id===deptId);
+  if(!r) return;
+  ui.modal = { type:"headcountDetail", data:r };
+  render();
+}
+
+/* ---------------- Directory ---------------- */
+function renderDirectory(u){
+  const scoped = u.role==="Manager" ? state.employees.filter(e=>e.departmentId===u.departmentId) : state.employees;
+  const filtered = scoped.filter(e=>{
+    const s = ui.directorySearch.toLowerCase();
+    const matchesSearch = !s || e.name.toLowerCase().includes(s) || e.empId.toLowerCase().includes(s);
+    const matchesDept = ui.directoryDept==="All" || e.department===ui.directoryDept;
+    const matchesStatus = ui.directoryStatus==="All" || e.status===ui.directoryStatus;
+    return matchesSearch && matchesDept && matchesStatus;
+  });
+  let html = `
+    <h1 class="pagetitle">People Directory</h1>
+    <p class="pagedesc">${u.role==="Manager" ? "Employees in your department." : "Search and manage all employees."}</p>
+    <div class="toolbar">
+      <input class="field" style="width:220px;margin-bottom:0;" placeholder="Search name or ID..." value="${esc(ui.directorySearch)}" oninput="ui.directorySearch=this.value;render()">
+      <select class="field" style="width:180px;margin-bottom:0;" onchange="ui.directoryDept=this.value;render()">
+        <option ${ui.directoryDept==="All"?"selected":""}>All</option>
+        ${DEPARTMENTS.map(d=>`<option ${ui.directoryDept===d.name?"selected":""}>${esc(d.name)}</option>`).join("")}
+      </select>
+      <select class="field" style="width:150px;margin-bottom:0;" onchange="ui.directoryStatus=this.value;render()">
+        <option ${ui.directoryStatus==="All"?"selected":""}>All</option>
+        <option ${ui.directoryStatus==="Active"?"selected":""}>Active</option>
+        <option ${ui.directoryStatus==="On Leave"?"selected":""}>On Leave</option>
+      </select>
+      ${(u.role==="HR"||u.role==="Admin") ? `<button class="btn-primary" style="width:auto;padding:9px 16px;margin-left:auto;" onclick="ui.modal={type:'addEmployee'};render()">+ Add employee</button>` : ""}
+    </div>
+    <div style="font-size:12px;color:var(--ink2);margin-bottom:8px;">${filtered.length} of ${scoped.length} employees</div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table>
+        <tr><th>Name</th><th>Job Title</th><th>Department</th><th>Status</th><th>Joined</th></tr>
+        ${filtered.length===0 ? `<tr><td colspan="5"><div class="empty">No employees match these filters.</div></td></tr>` :
+          filtered.map(e=>`
+          <tr class="rowlink" onclick="ui.modal={type:'employeeDetail',data:${JSON.stringify(e).replace(/"/g,'&quot;')}}">
+            <td><b>${esc(e.name)}</b><div style="font-size:11px;color:var(--ink2);">${esc(e.empId)}</div></td>
+            <td>${esc(e.jobTitle)}</td><td>${esc(e.department)}</td>
+            <td><span class="pill ${e.status==='Active'?'good':'warn'}">${esc(e.status)}</span></td>
+            <td>${esc(e.joinDate)}</td>
+          </tr>`).join("")}
+      </table>
+    </div>`;
+  return html;
+}
+
+/* ---------------- Requests & Approvals ---------------- */
+function renderRequests(u){
+  const isManager = u.role==="Manager";
+  const tabs = isManager ? ["Pending My Approval","Approved By Me","Rejected By Me"]
+    : u.role==="Admin" ? ["All Requests","Pending","Approved","Rejected"]
+    : ["My Requests"];
+  if(!ui.requestsTab || !tabs.includes(ui.requestsTab)) ui.requestsTab = tabs[0];
+
+  const scoped = state.requests.filter(r=>{
+    if(isManager){
+      if(ui.requestsTab==="Pending My Approval") return r.approverId===u.id && r.status==="PENDING_APPROVAL";
+      if(ui.requestsTab==="Approved By Me") return r.approverId===u.id && r.status==="APPROVED";
+      if(ui.requestsTab==="Rejected By Me") return r.approverId===u.id && r.status==="REJECTED";
+    } else if(u.role==="Admin"){
+      if(ui.requestsTab==="All Requests") return true;
+      if(ui.requestsTab==="Pending") return r.status==="PENDING_APPROVAL";
+      if(ui.requestsTab==="Approved") return r.status==="APPROVED";
+      if(ui.requestsTab==="Rejected") return r.status==="REJECTED";
+    } else {
+      return r.requesterId===u.id;
+    }
+    return false;
+  });
+
+  let html = `
+    <h1 class="pagetitle">Requests &amp; Approvals</h1>
+    <p class="pagedesc">Every decision requires a different approver than the requester.</p>
+    <div class="tabsrow">
+      ${tabs.map(t=>`<button class="${ui.requestsTab===t?'active':''}" onclick="ui.requestsTab='${t}';render()">${t}</button>`).join("")}
+    </div>`;
+
+  html += scoped.length===0 ? `<div class="empty">No requests in this view.</div>` :
+    `<div class="card" style="padding:0;overflow:hidden;">
+      <table>
+        <tr><th>Request</th><th>Requester</th><th>Department</th><th>Priority</th><th>Status</th></tr>
+        ${scoped.map(r=>`
+          <tr class="rowlink" onclick="ui.openRequestId='${r.id}';render()">
+            <td><b>${esc(r.id)}</b><div style="font-size:11px;color:var(--ink2);">${esc(r.requestType)}</div></td>
+            <td>${esc(r.requesterName)}</td><td>${esc(r.department)}</td><td>${esc(r.priority)}</td>
+            <td>${statusPill(r.status)}</td>
+          </tr>`).join("")}
+      </table>
+    </div>`;
+
+  if(ui.openRequestId){
+    const r = state.requests.find(x=>x.id===ui.openRequestId);
+    if(r) html += renderRequestDetailModal(r, u);
+  }
+  return html;
+}
+
+function renderRequestDetailModal(r, u){
+  const canDecide = u.role==="Manager" && r.approverId===u.id && r.status==="PENDING_APPROVAL";
+  let actions = "";
+  if(canDecide){
+    actions = `
+      <div style="display:flex;gap:8px;margin-top:16px;">
+        <button class="btn-primary" style="background:var(--green);width:auto;padding:9px 16px;" onclick="openDecisionModal('${r.id}','APPROVED')">Approve</button>
+        <button class="btn-primary" style="background:var(--red-dark);width:auto;padding:9px 16px;" onclick="openDecisionModal('${r.id}','REJECTED')">Reject</button>
+        <button class="btn-primary" style="background:var(--blue);width:auto;padding:9px 16px;" onclick="openDecisionModal('${r.id}','SENT_BACK')">Send back</button>
+      </div>`;
+  } else if(r.requesterId===u.id && u.role!=="Manager"){
+    actions = `<div style="font-size:11.5px;color:var(--ink2);margin-top:12px;">You submitted this request, so you can't approve or reject it — it's awaiting the department manager.</div>`;
+  }
+  return `
+    <div class="modal-overlay" onclick="if(event.target===this){ui.openRequestId=null;render();}">
+      <div class="modal">
+        <h3>${esc(r.id)} — ${esc(r.requestType)} <button class="x" onclick="ui.openRequestId=null;render()">×</button></h3>
+        <div style="font-size:13px;line-height:1.8;">
+          <div>Requester: <b>${esc(r.requesterName)}</b></div>
+          <div>Department: <b>${esc(r.department)}</b></div>
+          <div>Priority: <b>${esc(r.priority)}</b></div>
+          <div>Status: ${statusPill(r.status)}</div>
+          <div>Created: <b>${esc(r.createdAt)}</b></div>
+          ${r.comments ? `<div>Comments: ${esc(r.comments)}</div>` : ""}
+          ${r.rejectionReason ? `<div style="color:var(--red-dark);">Reason: ${esc(r.rejectionReason)}</div>` : ""}
+        </div>
+        ${actions}
+      </div>
+    </div>`;
+}
+function openDecisionModal(reqId, decision){
+  ui.reasonModal = { id:reqId, decision, reason:"" };
+  render();
+  showReasonModal();
+}
+function showReasonModal(){
+  if(!ui.reasonModal) return;
+  const rm = ui.reasonModal;
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.onclick = (e)=>{ if(e.target===overlay){ ui.reasonModal=null; overlay.remove(); } };
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>${rm.decision==="APPROVED"?"Approve request":rm.decision==="REJECTED"?"Reject request":"Send back request"}
+        <button class="x" onclick="this.closest('.modal-overlay').remove();ui.reasonModal=null;">×</button>
+      </h3>
+      <label class="lbl">${rm.decision==="APPROVED"?"Comment (optional)":"Reason (required)"}</label>
+      <textarea class="field" id="reasonText" style="min-height:70px;" placeholder="${rm.decision==='APPROVED'?'':'Explain why...'}"></textarea>
+      <button class="btn-primary" onclick="confirmDecision(this)">Confirm</button>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+function confirmDecision(btn){
+  const rm = ui.reasonModal;
+  if(!rm) return;
+  const overlay = btn.closest(".modal-overlay");
+  const reason = overlay.querySelector("#reasonText").value.trim();
+  if(rm.decision!=="APPROVED" && !reason){ toast("A reason is required.", "err"); return; }
+  const r = state.requests.find(x=>x.id===rm.id);
+  if(!r) return;
+  r.status = rm.decision;
+  r.updatedAt = nowStamp();
+  if(rm.decision==="APPROVED") r.approvalDate = nowStamp();
+  if(rm.decision!=="APPROVED") r.rejectionReason = reason;
+  const u = currentUser();
+  notify(r.requesterId, `${r.requestType} request ${r.id} was ${rm.decision.toLowerCase().replace("_"," ")} by ${u.name}.`, r.id);
+  addAudit(`${rm.decision==="APPROVED"?"Approved":rm.decision==="REJECTED"?"Rejected":"Sent back"} request ${r.id}`, "Request", {recordId:r.id});
+  ui.reasonModal = null;
+  overlay.remove();
+  ui.openRequestId = null;
+  render();
+  toast(rm.decision==="APPROVED" ? "Request approved successfully." : rm.decision==="REJECTED" ? "Request rejected." : "Request sent back.", "ok");
+}
+
+/* ---------------- Audit Log ---------------- */
+function renderAuditLog(u){
+  let html = `
+    <h1 class="pagetitle">Audit Log</h1>
+    <p class="pagedesc">Every approval, rejection, and data change is recorded here automatically.</p>`;
+  html += state.auditLog.length===0 ? `<div class="empty">No audit entries yet.</div>` :
+    `<div class="card" style="padding:0;overflow:hidden;">
+      ${state.auditLog.map(a=>`
+        <div style="padding:10px 16px;border-bottom:1px solid var(--line);font-size:12.5px;">
+          <div><b>${esc(a.user)}</b> <span style="color:var(--ink2);">(${esc(a.role)})</span> — ${esc(a.action)}</div>
+          <div style="color:var(--ink2);font-size:11px;">${esc(a.timestamp)} · ${esc(a.recordType)}</div>
+        </div>`).join("")}
+    </div>`;
+  return html;
+}
+
+/* ---------------- Administration ---------------- */
+function renderAdmin(u){
+  return `
+    <h1 class="pagetitle">Administration</h1>
+    <p class="pagedesc">System-wide configuration, visible only to Administrators.</p>
+    <h3 style="font-size:13.5px;margin-bottom:8px;">Users</h3>
+    <div class="card" style="padding:0;overflow:hidden;margin-bottom:22px;">
+      ${state.accounts.map(a=>`
+        <div style="padding:10px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;font-size:13px;">
+          <span>${esc(a.name)} <span style="color:var(--ink2);">(${esc(a.email)})</span></span><b>${esc(a.role)}</b>
+        </div>`).join("") || `<div class="empty">No users yet.</div>`}
+    </div>
+    <h3 style="font-size:13.5px;margin-bottom:8px;">Approval rules</h3>
+    <div class="card" style="font-size:13px;line-height:1.8;">
+      <div>Recruitment → HR submits → Department Manager approves</div>
+      <div>Transfer → HR submits → Current + Receiving Manager approve</div>
+      <div>Promotion → HR submits → Manager approves</div>
+      <div style="color:var(--ink2);margin-top:8px;">If requester and approver would be the same person, the system automatically routes to the next valid approver.</div>
+    </div>`;
+}
+
+/* ---------------- Profile page ---------------- */
+function renderProfilePage(u){
+  return `
+    <h1 class="pagetitle">My Profile</h1>
+    <p class="pagedesc">Edit your information. Changes apply immediately across the workspace.</p>
+    <div class="card" style="max-width:440px;">
+      <label class="lbl">Full name</label>
+      <input class="field" id="p_name" value="${esc(u.name)}">
+      <label class="lbl">Phone</label>
+      <input class="field" id="p_phone" value="${esc(u.phone||"")}" placeholder="+20 1xx xxx xxxx">
+      <label class="lbl">Corporate email</label>
+      <input class="field" value="${esc(u.email)}" disabled style="background:var(--paper);color:var(--ink2);">
+      <div style="font-size:11.5px;color:var(--red);font-weight:700;margin-bottom:14px;">${esc(u.role)} — role locked to this account</div>
+      <button class="btn-primary" style="margin-bottom:8px;" onclick="saveProfile()">Save changes</button>
+      <button class="btn-primary" style="background:#fff;color:var(--ink);border:1px solid var(--line);" onclick="handleSignOut()">Sign out</button>
+    </div>
+    <h3 style="font-size:13.5px;margin:22px 0 8px;">Change password</h3>
+    <div class="card" style="max-width:440px;">
+      <label class="lbl">New password</label>
+      <input class="field" type="password" id="p_pw1">
+      <label class="lbl">Confirm new password</label>
+      <input class="field" type="password" id="p_pw2">
+      <button class="btn-primary" style="background:var(--ink);" onclick="changePassword()">Update password</button>
+    </div>`;
+}
+function saveProfile(){
+  const u = currentUser();
+  u.name = document.getElementById("p_name").value.trim() || u.name;
+  u.phone = document.getElementById("p_phone").value.trim();
+  addAudit("Updated profile", "Account", {});
+  render();
+  toast("Profile updated.", "ok");
+}
+function changePassword(){
+  const pw1 = document.getElementById("p_pw1").value;
+  const pw2 = document.getElementById("p_pw2").value;
+  if(!passwordOk(pw1)){ toast("New password doesn't meet requirements.", "err"); return; }
+  if(pw1!==pw2){ toast("Passwords do not match.", "err"); return; }
+  currentUser().password = pw1;
+  addAudit("Changed password", "Account", {});
+  render();
+  toast("Password updated.", "ok");
+}
+
+/* ---------------- Modals (headcount detail, add employee, employee detail) ---------------- */
+function renderModal(){
+  const m = ui.modal;
+  if(!m) return "";
+  if(m.type==="headcountDetail"){
+    const r = m.data;
+    return `
+      <div class="modal-overlay" onclick="if(event.target===this){ui.modal=null;render();}">
+        <div class="modal">
+          <h3>${esc(r.name)} — Headcount Detail <button class="x" onclick="ui.modal=null;render()">×</button></h3>
+          <div style="font-size:13px;line-height:1.8;">
+            <div>Approved headcount: <b>${r.approved}</b></div>
+            <div>Current headcount: <b>${r.current}</b></div>
+            <div>Gap: <b style="color:${r.gap>0?'var(--red)':'var(--green)'};">${r.gap}</b></div>
+            <div>Status: <span class="pill ${r.tone}">${r.status}</span></div>
+          </div>
+          ${(currentUser().role==="HR"||currentUser().role==="Admin") ? `<button class="btn-primary" style="margin-top:16px;" onclick="ui.modal={type:'newRequest',data:{deptId:'${r.id}',deptName:'${esc(r.name)}'}}">Create recruitment request</button>` : ""}
+        </div>
+      </div>`;
+  }
+  if(m.type==="newRequest"){
+    return `
+      <div class="modal-overlay" onclick="if(event.target===this){ui.modal=null;render();}">
+        <div class="modal">
+          <h3>New request — ${esc(m.data.deptName)} <button class="x" onclick="ui.modal=null;render()">×</button></h3>
+          <label class="lbl">Request type</label>
+          <select class="field" id="nr_type">${REQUEST_TYPES.map(t=>`<option>${t}</option>`).join("")}</select>
+          <label class="lbl">Priority</label>
+          <select class="field" id="nr_priority"><option>Low</option><option selected>Medium</option><option>High</option></select>
+          <label class="lbl">Comments</label>
+          <textarea class="field" id="nr_comments" style="min-height:70px;" placeholder="Context for the approving manager..."></textarea>
+          <button class="btn-primary" onclick="submitNewRequest('${m.data.deptId}','${esc(m.data.deptName)}')">Submit request</button>
+        </div>
+      </div>`;
+  }
+  if(m.type==="addEmployee"){
+    return `
+      <div class="modal-overlay" onclick="if(event.target===this){ui.modal=null;render();}">
+        <div class="modal">
+          <h3>Add employee <button class="x" onclick="ui.modal=null;render()">×</button></h3>
+          <label class="lbl">Full name</label>
+          <input class="field" id="ae_name" placeholder="Tarek Aziz">
+          <label class="lbl">Corporate email</label>
+          <input class="field" id="ae_email" placeholder="firstname.lastname@vodafone.eg">
+          <div id="ae_err"></div>
+          <label class="lbl">Job title</label>
+          <select class="field" id="ae_title">${JOB_TITLES.map(t=>`<option>${t}</option>`).join("")}</select>
+          <label class="lbl">Department</label>
+          <select class="field" id="ae_dept">${DEPARTMENTS.map(d=>`<option>${d.name}</option>`).join("")}</select>
+          <button class="btn-primary" onclick="submitAddEmployee()">Add employee</button>
+        </div>
+      </div>`;
+  }
+  if(m.type==="employeeDetail"){
+    const e = m.data;
+    return `
+      <div class="modal-overlay" onclick="if(event.target===this){ui.modal=null;render();}">
+        <div class="modal">
+          <h3>${esc(e.name)} <button class="x" onclick="ui.modal=null;render()">×</button></h3>
+          <div style="font-size:13px;line-height:1.8;">
+            <div>Employee ID: <b>${esc(e.empId)}</b></div>
+            <div>Email: <b>${esc(e.email)}</b></div>
+            <div>Job title: <b>${esc(e.jobTitle)}</b></div>
+            <div>Department: <b>${esc(e.department)}</b> (${esc(e.businessUnit)})</div>
+            <div>Location: <b>${esc(e.location)}</b></div>
+            <div>Status: <span class="pill ${e.status==='Active'?'good':'warn'}">${esc(e.status)}</span></div>
+            <div>Joined: <b>${esc(e.joinDate)}</b></div>
+          </div>
+        </div>
+      </div>`;
+  }
+  return "";
+}
+function submitNewRequest(deptId, deptName){
+  const type = document.getElementById("nr_type").value;
+  const priority = document.getElementById("nr_priority").value;
+  const comments = document.getElementById("nr_comments").value;
+  const u = currentUser();
+  const managers = state.accounts.filter(a=>a.role==="Manager" && a.departmentId===deptId && a.id!==u.id);
+  const anyManager = state.accounts.find(a=>a.role==="Manager" && a.id!==u.id);
+  const approver = managers[0] || anyManager;
+  if(!approver){
+    toast("No manager account exists yet for this department — sign up a Manager account first to receive approvals.", "err");
+    return;
+  }
+  const req = {
+    id: "REQ-"+(1000+state.requests.length+1),
+    requesterId: u.id, requesterName: u.name, approverId: approver.id,
+    requestType: type, departmentId: deptId, department: deptName, priority,
+    status: "PENDING_APPROVAL", createdAt: nowStamp(), updatedAt: nowStamp(),
+    comments, rejectionReason: null, approvalDate: null,
+  };
+  state.requests.unshift(req);
+  notify(approver.id, `New ${type} request ${req.id} requires your approval.`, req.id);
+  addAudit(`Submitted ${type} request ${req.id}`, "Request", {recordId:req.id});
+  ui.modal = null;
+  ui.headcountOpenDept = null;
+  render();
+  toast("Request submitted.", "ok");
+}
+function submitAddEmployee(){
+  const name = document.getElementById("ae_name").value.trim();
+  const email = document.getElementById("ae_email").value.trim();
+  const title = document.getElementById("ae_title").value;
+  const deptName = document.getElementById("ae_dept").value;
+  if(!name){ document.getElementById("ae_err").innerHTML = `<div class="err">Enter a name.</div>`; return; }
+  if(!validateEmail(email)){ document.getElementById("ae_err").innerHTML = `<div class="err">Email format is invalid. Use firstname.lastname@vodafone.eg</div>`; return; }
+  const dept = DEPARTMENTS.find(d=>d.name===deptName);
+  const emp = {
+    id: uid("e"), empId: "VF-"+(2000+Math.floor(Math.random()*900)), name, email: email.toLowerCase(),
+    jobTitle: title, department: dept.name, departmentId: dept.id, businessUnit: dept.bu,
+    location: LOCATIONS[0], status: "Active", joinDate: new Date().toISOString().slice(0,10),
+  };
+  state.employees.push(emp);
+  addAudit(`Added employee ${emp.name} (${emp.empId})`, "Employee", {recordId:emp.empId});
+  ui.modal = null;
+  render();
+  toast("Employee added.", "ok");
+}
+
+/* ---------------- boot ---------------- */
+document.addEventListener("click", function(e){
+  // close popovers when clicking outside
+  if(!e.target.closest(".panel-pop") && !e.target.closest(".iconbtn") && !e.target.closest(".userbtn")){
+    if(ui.showNotifs || ui.showProfile){ ui.showNotifs=false; ui.showProfile=false; render(); }
+  }
+});
+render();
+</script>
+</body>
+</html>
