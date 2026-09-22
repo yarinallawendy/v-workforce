@@ -142,9 +142,10 @@ const DEPARTMENTS = [
   { id:"d4", name:"Finance", bu:"Corporate" },
   { id:"d5", name:"IT Services", bu:"Technology" },
 ];
-const LOCATIONS = ["Cairo HQ","Alexandria","Giza","Mansoura","Assiut"];
+const LOCATIONS = ["Smart Village HQ","Cairo Festival City Store","City Stars Store","Mall of Egypt Store","Alexandria San Stefano Store","Mansoura City Centre Store","Assiut Central Store","Giza Mall of Arabia Store"];
 const JOB_TITLES = ["Retail Associate","Store Manager","Care Specialist","Network Engineer","Financial Analyst","IT Support Analyst"];
 const REQUEST_TYPES = ["Recruitment","Transfer","Promotion","IT Access","Benefits"];
+const EMP_STATUSES = ["Active","On Leave","Resigned","Terminated"];
 
 function uid(prefix){ return prefix + Math.random().toString(36).slice(2,9); }
 function nowStamp(){
@@ -168,14 +169,26 @@ function seedEmployees(){
     "Heba Mahmoud","Fady George","Salma Reda","Mostafa Ali","Nadia Ezzat"];
   return names.map((name,i)=>{
     const dept = DEPARTMENTS[i % DEPARTMENTS.length];
-    const status = i % 9 === 0 ? "On Leave" : "Active";
+    // Give a realistic mix: mostly Active, a couple On Leave, one Resigned, one Terminated.
+    let status = "Active";
+    if(i===3) status = "On Leave";
+    else if(i===7) status = "On Leave";
+    else if(i===11) status = "Resigned";
+    else if(i===13) status = "Terminated";
+    const joinDate = `${2019+(i%6)}-0${(i%9)+1}-1${i%2}`;
+    const leaveDate = (status==="Resigned"||status==="Terminated") ? `2026-0${(i%8)+1}-1${i%2}` : null;
     return {
       id:"e"+i, empId:"VF-"+(1000+i), name, email:name.toLowerCase().replace(" ",".")+"@vodafone.eg",
+      phone: "+20 10"+(String(10000000+i*7654321).slice(0,8)),
       jobTitle: JOB_TITLES[i % JOB_TITLES.length], department: dept.name, departmentId: dept.id,
       businessUnit: dept.bu, location: LOCATIONS[i % LOCATIONS.length], status,
-      joinDate: `${2019+(i%6)}-0${(i%9)+1}-1${i%2}`
+      joinDate, leaveDate
     };
   });
+}
+function reportingManagerName(departmentId){
+  const mgr = state.accounts.find(a=>a.role==="Manager" && a.departmentId===departmentId);
+  return mgr ? mgr.name : "Unassigned";
 }
 
 function defaultState(){
@@ -233,25 +246,93 @@ let ui = {
   headcountYear: 2026, headcountOpenDept: null,
 };
 
+function captureFocus(){
+  const el = document.activeElement;
+  if(!el || !el.id) return null;
+  const f = { id: el.id };
+  if(typeof el.selectionStart === "number"){ f.selStart = el.selectionStart; f.selEnd = el.selectionEnd; }
+  return f;
+}
+function restoreFocus(f){
+  if(!f) return;
+  const el = document.getElementById(f.id);
+  if(!el) return;
+  el.focus();
+  if(typeof f.selStart === "number" && el.setSelectionRange){
+    try{ el.setSelectionRange(f.selStart, f.selEnd); }catch(e){}
+  }
+}
 function render(){
+  const focus = captureFocus();
   saveState();
   const u = currentUser();
   if(!u){
     document.getElementById("authScreen").style.display="flex";
     document.getElementById("app").style.display="none";
-    renderAuth();
+    if(mfa.pendingUserId) renderMfa(); else renderAuth();
   } else {
     document.getElementById("authScreen").style.display="none";
     document.getElementById("app").style.display="block";
     renderApp();
   }
+  restoreFocus(focus);
 }
 
 /* ---------------- Auth screen ---------------- */
 let authForm = { name:"", email:"", password:"", confirm:"", role:"HR" };
 let authError = "";
+let mfa = { pendingUserId:null, code:null, input:"", error:"" };
+
+function genMfaCode(){ return String(Math.floor(100000 + Math.random()*900000)); }
+
+function renderMfa(){
+  const focus = captureFocus();
+  const host = document.getElementById("authScreen");
+  const u = state.accounts.find(a=>a.id===mfa.pendingUserId);
+  host.innerHTML = `
+    <div class="auth-card">
+      <div class="auth-head">
+        <div class="mark">V</div>
+        <div><b>V-WORKFORCE</b><span>Vodafone Egypt · Headcount Management</span></div>
+      </div>
+      <div class="auth-body">
+        <h2>Two-factor verification</h2>
+        <p class="sub">Enter the 6-digit code to finish signing in as ${esc(u?u.name:"")}.</p>
+        <div class="hint" style="background:var(--blue-tint);color:var(--blue);padding:8px 10px;border-radius:4px;margin-bottom:14px;">
+          Demo mode — no SMS is actually sent. Your verification code is <b>${mfa.code}</b>.
+        </div>
+        <label class="lbl">Verification code</label>
+        <input class="field" id="mfa_code" maxlength="6" inputmode="numeric" placeholder="000000" value="${esc(mfa.input)}"
+          oninput="mfa.input=this.value;render()" onkeydown="if(event.key==='Enter')verifyMfa()">
+        ${mfa.error?`<div class="err">${esc(mfa.error)}</div>`:""}
+        <button class="btn-primary" onclick="verifyMfa()">Verify and sign in</button>
+        <div class="switchrow"><a onclick="resendMfa()">Resend code</a> &nbsp;·&nbsp; <a onclick="cancelMfa()">Cancel</a></div>
+      </div>
+    </div>`;
+  restoreFocus(focus);
+}
+function verifyMfa(){
+  if(mfa.input.trim() !== mfa.code){ mfa.error = "Incorrect code. Please try again."; render(); return; }
+  const uid_ = mfa.pendingUserId;
+  mfa = { pendingUserId:null, code:null, input:"", error:"" };
+  state.currentUserId = uid_;
+  authForm = { name:"", email:"", password:"", confirm:"", role:"HR" };
+  render();
+}
+function resendMfa(){
+  mfa.code = genMfaCode();
+  mfa.input = "";
+  mfa.error = "";
+  toast("A new verification code was generated.", "ok");
+  render();
+}
+function cancelMfa(){
+  mfa = { pendingUserId:null, code:null, input:"", error:"" };
+  render();
+}
 
 function renderAuth(){
+  const focus = captureFocus();
   const host = document.getElementById("authScreen");
   const pw = validatePassword(authForm.password);
   if(ui.authMode==="signup"){
@@ -281,7 +362,7 @@ function renderAuth(){
           </select>
           <label class="lbl">Password</label>
           <div class="field pwwrap" style="padding:0;border:none;">
-            <input class="field" type="${authForm._show?'text':'password'}" style="margin-bottom:0;" value="${esc(authForm.password)}" oninput="authForm.password=this.value;renderAuth()">
+            <input class="field" id="f_password" type="${authForm._show?'text':'password'}" style="margin-bottom:0;" value="${esc(authForm.password)}" oninput="authForm.password=this.value;renderAuth()">
             <button class="showpw" onclick="authForm._show=!authForm._show;renderAuth()">${authForm._show?'Hide':'Show'}</button>
           </div>
           <div class="pwreqs">
@@ -292,7 +373,7 @@ function renderAuth(){
             <div class="${pw.symbol?'ok':'no'}">${pw.symbol?'✓':'○'} Symbol</div>
           </div>
           <label class="lbl">Confirm password</label>
-          <input class="field" type="${authForm._show?'text':'password'}" value="${esc(authForm.confirm)}" oninput="authForm.confirm=this.value">
+          <input class="field" id="f_confirm" type="${authForm._show?'text':'password'}" value="${esc(authForm.confirm)}" oninput="authForm.confirm=this.value">
           ${authError?`<div class="err">${esc(authError)}</div>`:""}
           <button class="btn-primary" onclick="handleSignup()">Create account</button>
           <div class="switchrow">Already have an account? <a onclick="ui.authMode='signin';authError='';render()">Sign in</a></div>
@@ -313,10 +394,10 @@ function renderAuth(){
           <h2>Sign in</h2>
           <p class="sub">Use your Vodafone corporate email.</p>
           <label class="lbl">Corporate email</label>
-          <input class="field" value="${esc(authForm.email)}" placeholder="ahmed.hassan@vodafone.eg" oninput="authForm.email=this.value">
+          <input class="field" id="si_email" value="${esc(authForm.email)}" placeholder="ahmed.hassan@vodafone.eg" oninput="authForm.email=this.value">
           <label class="lbl">Password</label>
           <div class="field pwwrap" style="padding:0;border:none;">
-            <input class="field" type="${authForm._show?'text':'password'}" style="margin-bottom:0;" value="${esc(authForm.password)}" oninput="authForm.password=this.value" onkeydown="if(event.key==='Enter')handleSignin()">
+            <input class="field" id="si_password" type="${authForm._show?'text':'password'}" style="margin-bottom:0;" value="${esc(authForm.password)}" oninput="authForm.password=this.value" onkeydown="if(event.key==='Enter')handleSignin()">
             <button class="showpw" onclick="authForm._show=!authForm._show;renderAuth()">${authForm._show?'Hide':'Show'}</button>
           </div>
           ${authError?`<div class="err">${esc(authError)}</div>`:""}
@@ -328,6 +409,7 @@ function renderAuth(){
         </div>
       </div>`;
   }
+  restoreFocus(focus);
 }
 
 function handleSignup(){
@@ -353,13 +435,13 @@ function handleSignin(){
   authError = "";
   const acc = state.accounts.find(a=>a.email.toLowerCase()===authForm.email.toLowerCase());
   if(!acc || acc.password!==authForm.password){ authError="Incorrect email or password."; return renderAuth(); }
-  state.currentUserId = acc.id;
-  authForm = { name:"", email:"", password:"", confirm:"", role:"HR" };
+  mfa = { pendingUserId: acc.id, code: genMfaCode(), input:"", error:"" };
   render();
 }
 function handleSignOut(){
   state.currentUserId = null;
   ui.tab = "overview"; ui.showProfile=false; ui.showNotifs=false;
+  ui.authMode = "signin";
   render();
 }
 
@@ -505,6 +587,25 @@ function renderOverview(u){
           </div>
         </div>`).join("");
   }
+
+  if(u.role==="HR" || u.role==="Admin"){
+    const maxCount = Math.max(1, ...DEPARTMENTS.map(d=>state.employees.filter(e=>e.departmentId===d.id && e.status==="Active").length));
+    html += `<h3 style="font-size:14.5px;margin:22px 0 10px;">Workforce mix by department</h3>
+      <div class="card">
+        ${DEPARTMENTS.map(d=>{
+          const count = state.employees.filter(e=>e.departmentId===d.id && e.status==="Active").length;
+          const pct = Math.round((count/maxCount)*100);
+          return `<div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">
+              <span>${esc(d.name)}</span><b>${count}</b>
+            </div>
+            <div style="background:var(--paper);border-radius:4px;height:8px;overflow:hidden;">
+              <div style="width:${pct}%;background:var(--red);height:100%;"></div>
+            </div>
+          </div>`;
+        }).join("")}
+      </div>`;
+  }
   return html;
 }
 
@@ -574,7 +675,7 @@ function renderDirectory(u){
     <h1 class="pagetitle">People Directory</h1>
     <p class="pagedesc">${u.role==="Manager" ? "Employees in your department." : "Search and manage all employees."}</p>
     <div class="toolbar">
-      <input class="field" style="width:220px;margin-bottom:0;" placeholder="Search name or ID..." value="${esc(ui.directorySearch)}" oninput="ui.directorySearch=this.value;render()">
+      <input class="field" id="dir_search" style="width:220px;margin-bottom:0;" placeholder="Search name or ID..." value="${esc(ui.directorySearch)}" oninput="ui.directorySearch=this.value;render()">
       <select class="field" style="width:180px;margin-bottom:0;" onchange="ui.directoryDept=this.value;render()">
         <option ${ui.directoryDept==="All"?"selected":""}>All</option>
         ${DEPARTMENTS.map(d=>`<option ${ui.directoryDept===d.name?"selected":""}>${esc(d.name)}</option>`).join("")}
@@ -592,7 +693,7 @@ function renderDirectory(u){
         <tr><th>Name</th><th>Job Title</th><th>Department</th><th>Status</th><th>Joined</th></tr>
         ${filtered.length===0 ? `<tr><td colspan="5"><div class="empty">No employees match these filters.</div></td></tr>` :
           filtered.map(e=>`
-          <tr class="rowlink" onclick="ui.modal={type:'employeeDetail',data:${JSON.stringify(e).replace(/"/g,'&quot;')}}">
+          <tr class="rowlink" onclick="ui.modal={type:'employeeDetail',data:{id:'${e.id}'}};render()">
             <td><b>${esc(e.name)}</b><div style="font-size:11px;color:var(--ink2);">${esc(e.empId)}</div></td>
             <td>${esc(e.jobTitle)}</td><td>${esc(e.department)}</td>
             <td><span class="pill ${e.status==='Active'?'good':'warn'}">${esc(e.status)}</span></td>
@@ -630,8 +731,11 @@ function renderRequests(u){
   let html = `
     <h1 class="pagetitle">Requests &amp; Approvals</h1>
     <p class="pagedesc">Every decision requires a different approver than the requester.</p>
-    <div class="tabsrow">
-      ${tabs.map(t=>`<button class="${ui.requestsTab===t?'active':''}" onclick="ui.requestsTab='${t}';render()">${t}</button>`).join("")}
+    <div class="toolbar">
+      <div class="tabsrow" style="margin-bottom:0;">
+        ${tabs.map(t=>`<button class="${ui.requestsTab===t?'active':''}" onclick="ui.requestsTab='${t}';render()">${t}</button>`).join("")}
+      </div>
+      <button class="btn-primary" style="width:auto;padding:9px 16px;margin-left:auto;" onclick="openNewRequestModal()">+ New request</button>
     </div>`;
 
   html += scoped.length===0 ? `<div class="empty">No requests in this view.</div>` :
@@ -729,10 +833,22 @@ function confirmDecision(btn){
 }
 
 /* ---------------- Audit Log ---------------- */
+function exportAuditCsv(){
+  const rows = [["Timestamp","User","Role","Action","Record Type"]];
+  state.auditLog.forEach(a=>rows.push([a.timestamp, a.user, a.role, a.action, a.recordType]));
+  const csv = rows.map(r=>r.map(v=>`"${String(v==null?"":v).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], {type:"text/csv"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "v-workforce-audit-log.csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
 function renderAuditLog(u){
   let html = `
     <h1 class="pagetitle">Audit Log</h1>
-    <p class="pagedesc">Every approval, rejection, and data change is recorded here automatically.</p>`;
+    <p class="pagedesc">Every approval, rejection, and data change is recorded here automatically.</p>
+    <div class="toolbar"><button class="btn-primary" style="width:auto;padding:9px 16px;" onclick="exportAuditCsv()">Export CSV</button></div>`;
   html += state.auditLog.length===0 ? `<div class="empty">No audit entries yet.</div>` :
     `<div class="card" style="padding:0;overflow:hidden;">
       ${state.auditLog.map(a=>`
@@ -825,7 +941,7 @@ function renderModal(){
             <div>Gap: <b style="color:${r.gap>0?'var(--red)':'var(--green)'};">${r.gap}</b></div>
             <div>Status: <span class="pill ${r.tone}">${r.status}</span></div>
           </div>
-          ${(currentUser().role==="HR"||currentUser().role==="Admin") ? `<button class="btn-primary" style="margin-top:16px;" onclick="ui.modal={type:'newRequest',data:{deptId:'${r.id}',deptName:'${esc(r.name)}'}}">Create recruitment request</button>` : ""}
+          ${(currentUser().role==="HR"||currentUser().role==="Admin") ? `<button class="btn-primary" style="margin-top:16px;" onclick="ui.modal={type:'newRequest',data:{deptId:'${r.id}',type:'Recruitment'}}">Create recruitment request</button>` : ""}
         </div>
       </div>`;
   }
@@ -833,14 +949,16 @@ function renderModal(){
     return `
       <div class="modal-overlay" onclick="if(event.target===this){ui.modal=null;render();}">
         <div class="modal">
-          <h3>New request — ${esc(m.data.deptName)} <button class="x" onclick="ui.modal=null;render()">×</button></h3>
+          <h3>New request <button class="x" onclick="ui.modal=null;render()">×</button></h3>
+          <label class="lbl">Department</label>
+          <select class="field" id="nr_dept">${DEPARTMENTS.map(d=>`<option value="${d.id}" ${m.data.deptId===d.id?"selected":""}>${esc(d.name)}</option>`).join("")}</select>
           <label class="lbl">Request type</label>
-          <select class="field" id="nr_type">${REQUEST_TYPES.map(t=>`<option>${t}</option>`).join("")}</select>
+          <select class="field" id="nr_type">${REQUEST_TYPES.map(t=>`<option ${m.data.type===t?"selected":""}>${t}</option>`).join("")}</select>
           <label class="lbl">Priority</label>
           <select class="field" id="nr_priority"><option>Low</option><option selected>Medium</option><option>High</option></select>
           <label class="lbl">Comments</label>
-          <textarea class="field" id="nr_comments" style="min-height:70px;" placeholder="Context for the approving manager..."></textarea>
-          <button class="btn-primary" onclick="submitNewRequest('${m.data.deptId}','${esc(m.data.deptName)}')">Submit request</button>
+          <textarea class="field" id="nr_comments" style="min-height:70px;" placeholder="Context for the approving manager...">${esc(m.data.comments||"")}</textarea>
+          <button class="btn-primary" onclick="submitNewRequest()">Submit request</button>
         </div>
       </div>`;
   }
@@ -853,17 +971,26 @@ function renderModal(){
           <input class="field" id="ae_name" placeholder="Tarek Aziz">
           <label class="lbl">Corporate email</label>
           <input class="field" id="ae_email" placeholder="firstname.lastname@vodafone.eg">
+          <label class="lbl">Phone</label>
+          <input class="field" id="ae_phone" placeholder="+20 1xx xxx xxxx">
           <div id="ae_err"></div>
           <label class="lbl">Job title</label>
           <select class="field" id="ae_title">${JOB_TITLES.map(t=>`<option>${t}</option>`).join("")}</select>
           <label class="lbl">Department</label>
           <select class="field" id="ae_dept">${DEPARTMENTS.map(d=>`<option>${d.name}</option>`).join("")}</select>
+          <label class="lbl">Location</label>
+          <select class="field" id="ae_loc">${LOCATIONS.map(l=>`<option>${l}</option>`).join("")}</select>
+          <label class="lbl">Join date</label>
+          <input class="field" id="ae_join" type="date" value="${new Date().toISOString().slice(0,10)}">
           <button class="btn-primary" onclick="submitAddEmployee()">Add employee</button>
         </div>
       </div>`;
   }
   if(m.type==="employeeDetail"){
-    const e = m.data;
+    const e = state.employees.find(x=>x.id===m.data.id) || m.data;
+    const u = currentUser();
+    const canManage = u.role==="HR" || u.role==="Admin";
+    const statusTone = e.status==="Active" ? "good" : e.status==="On Leave" ? "warn" : "bad";
     return `
       <div class="modal-overlay" onclick="if(event.target===this){ui.modal=null;render();}">
         <div class="modal">
@@ -871,18 +998,34 @@ function renderModal(){
           <div style="font-size:13px;line-height:1.8;">
             <div>Employee ID: <b>${esc(e.empId)}</b></div>
             <div>Email: <b>${esc(e.email)}</b></div>
+            <div>Phone: <b>${esc(e.phone||"—")}</b></div>
             <div>Job title: <b>${esc(e.jobTitle)}</b></div>
             <div>Department: <b>${esc(e.department)}</b> (${esc(e.businessUnit)})</div>
+            <div>Reporting manager: <b>${esc(reportingManagerName(e.departmentId))}</b></div>
             <div>Location: <b>${esc(e.location)}</b></div>
-            <div>Status: <span class="pill ${e.status==='Active'?'good':'warn'}">${esc(e.status)}</span></div>
+            <div>Status: <span class="pill ${statusTone}">${esc(e.status)}</span></div>
             <div>Joined: <b>${esc(e.joinDate)}</b></div>
+            ${e.leaveDate ? `<div>Left: <b>${esc(e.leaveDate)}</b></div>` : ""}
           </div>
+          ${canManage ? `
+            <h3 style="font-size:13px;margin:16px 0 8px;">Update status</h3>
+            <select class="field" id="ed_status">${EMP_STATUSES.map(s=>`<option ${e.status===s?"selected":""}>${s}</option>`).join("")}</select>
+            <button class="btn-primary" style="background:var(--ink);" onclick="updateEmployeeStatus('${e.id}')">Save status</button>
+          ` : ""}
         </div>
       </div>`;
   }
   return "";
 }
-function submitNewRequest(deptId, deptName){
+function openNewRequestModal(){
+  const u = currentUser();
+  const defaultDeptId = (u.role==="Manager" && u.departmentId) ? u.departmentId : DEPARTMENTS[0].id;
+  ui.modal = { type:"newRequest", data:{ deptId: defaultDeptId } };
+  render();
+}
+function submitNewRequest(){
+  const deptId = document.getElementById("nr_dept").value;
+  const deptName = DEPARTMENTS.find(d=>d.id===deptId).name;
   const type = document.getElementById("nr_type").value;
   const priority = document.getElementById("nr_priority").value;
   const comments = document.getElementById("nr_comments").value;
@@ -909,24 +1052,47 @@ function submitNewRequest(deptId, deptName){
   render();
   toast("Request submitted.", "ok");
 }
+function updateEmployeeStatus(empId){
+  const emp = state.employees.find(e=>e.id===empId);
+  if(!emp) return;
+  const newStatus = document.getElementById("ed_status").value;
+  const wasActive = emp.status;
+  emp.status = newStatus;
+  if(newStatus==="Resigned" || newStatus==="Terminated"){
+    if(!emp.leaveDate) emp.leaveDate = new Date().toISOString().slice(0,10);
+  } else {
+    emp.leaveDate = null;
+  }
+  if(wasActive !== newStatus){
+    addAudit(`Changed ${emp.name} (${emp.empId}) status: ${wasActive} → ${newStatus}`, "Employee", {recordId:emp.empId});
+  }
+  ui.modal = null;
+  render();
+  toast(`${emp.name} is now marked ${newStatus}.`, "ok");
+}
 function submitAddEmployee(){
   const name = document.getElementById("ae_name").value.trim();
   const email = document.getElementById("ae_email").value.trim();
+  const phone = document.getElementById("ae_phone").value.trim();
   const title = document.getElementById("ae_title").value;
   const deptName = document.getElementById("ae_dept").value;
+  const location = document.getElementById("ae_loc").value;
+  const joinDate = document.getElementById("ae_join").value || new Date().toISOString().slice(0,10);
   if(!name){ document.getElementById("ae_err").innerHTML = `<div class="err">Enter a name.</div>`; return; }
   if(!validateEmail(email)){ document.getElementById("ae_err").innerHTML = `<div class="err">Email format is invalid. Use firstname.lastname@vodafone.eg</div>`; return; }
+  if(state.employees.some(e=>e.email.toLowerCase()===email.toLowerCase())){ document.getElementById("ae_err").innerHTML = `<div class="err">An employee with this email already exists.</div>`; return; }
   const dept = DEPARTMENTS.find(d=>d.name===deptName);
   const emp = {
-    id: uid("e"), empId: "VF-"+(2000+Math.floor(Math.random()*900)), name, email: email.toLowerCase(),
+    id: uid("e"), empId: "VF-"+(2000+Math.floor(Math.random()*900)), name, email: email.toLowerCase(), phone,
     jobTitle: title, department: dept.name, departmentId: dept.id, businessUnit: dept.bu,
-    location: LOCATIONS[0], status: "Active", joinDate: new Date().toISOString().slice(0,10),
+    location, status: "Active", joinDate, leaveDate: null,
   };
   state.employees.push(emp);
   addAudit(`Added employee ${emp.name} (${emp.empId})`, "Employee", {recordId:emp.empId});
-  ui.modal = null;
+  ui.directorySearch = ""; ui.directoryDept = "All"; ui.directoryStatus = "All";
+  ui.modal = { type:"employeeDetail", data: emp };
   render();
-  toast("Employee added.", "ok");
+  toast(`${emp.name} was added to ${emp.department}.`, "ok");
 }
 
 /* ---------------- boot ---------------- */
@@ -934,6 +1100,14 @@ document.addEventListener("click", function(e){
   // close popovers when clicking outside
   if(!e.target.closest(".panel-pop") && !e.target.closest(".iconbtn") && !e.target.closest(".userbtn")){
     if(ui.showNotifs || ui.showProfile){ ui.showNotifs=false; ui.showProfile=false; render(); }
+  }
+});
+// Keep every open tab/window in sync: if another tab (e.g. a different role
+// signed in on the same browser) changes shared data, reflect it immediately.
+window.addEventListener("storage", function(e){
+  if(e.key === LS_KEY){
+    state = loadState();
+    render();
   }
 });
 render();
