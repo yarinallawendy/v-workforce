@@ -197,6 +197,7 @@ function defaultState(){
     employees: seedEmployees(),
     requests: [],        // {id,requesterId,requesterName,approverId,requestType,departmentId,department,priority,status,createdAt,updatedAt,comments,rejectionReason}
     notifications: [],   // {id,userId,message,requestId,read,timestamp}
+    messages: [],        // {id,requestId,fromId,fromName,toId,toName,text,timestamp,system}
     auditLog: [],
     currentUserId: null,
   };
@@ -206,7 +207,11 @@ let state = loadState();
 function loadState(){
   try{
     const raw = localStorage.getItem(LS_KEY);
-    if(raw) return JSON.parse(raw);
+    if(raw){
+      const s = JSON.parse(raw);
+      if(!s.messages) s.messages = [];
+      return s;
+    }
   }catch(e){}
   return defaultState();
 }
@@ -244,6 +249,8 @@ let ui = {
   requestsTab: null,
   directorySearch: "", directoryDept:"All", directoryStatus:"All",
   headcountYear: 2026, headcountOpenDept: null,
+  commsThread: null, commsDraft: "",
+  importStep: "select", importRaw: "", importRows: null,
 };
 
 function captureFocus(){
@@ -447,13 +454,14 @@ function handleSignOut(){
 
 /* ---------------- Main App shell ---------------- */
 const NAV_BY_ROLE = {
-  HR: ["overview","headcount","directory","requests","audit","profile"],
-  Manager: ["overview","headcount","directory","requests","profile"],
-  Admin: ["overview","headcount","directory","requests","audit","admin","profile"],
+  HR: ["overview","headcount","workforcemix","directory","requests","comms","analytics","audit","datamgmt","profile"],
+  Manager: ["overview","headcount","directory","requests","comms","profile"],
+  Admin: ["overview","headcount","workforcemix","directory","requests","comms","analytics","audit","datamgmt","admin","profile"],
 };
 const NAV_LABELS = {
-  overview:"Overview", headcount:"Headcount Planning", directory:"People Directory",
-  requests:"Requests & Approvals", audit:"Audit Log", admin:"Administration", profile:"My Profile"
+  overview:"Overview", headcount:"Headcount Planning", workforcemix:"Workforce Mix", directory:"People Directory",
+  requests:"Requests & Approvals", comms:"Communication Center", analytics:"Analytics",
+  audit:"Audit Log", datamgmt:"Data Management", admin:"Administration", profile:"My Profile"
 };
 
 function renderApp(){
@@ -496,11 +504,16 @@ function renderApp(){
   const main = document.getElementById("mainContent");
   if(ui.tab==="overview") main.innerHTML = renderOverview(u);
   else if(ui.tab==="headcount") main.innerHTML = renderHeadcount(u);
+  else if(ui.tab==="workforcemix") main.innerHTML = renderWorkforceMix(u);
   else if(ui.tab==="directory") main.innerHTML = renderDirectory(u);
   else if(ui.tab==="requests") main.innerHTML = renderRequests(u);
+  else if(ui.tab==="comms") main.innerHTML = renderComms(u);
+  else if(ui.tab==="analytics") main.innerHTML = renderAnalytics(u);
   else if(ui.tab==="audit") main.innerHTML = renderAuditLog(u);
+  else if(ui.tab==="datamgmt") main.innerHTML = renderDataMgmt(u);
   else if(ui.tab==="admin") main.innerHTML = renderAdmin(u);
   else if(ui.tab==="profile") main.innerHTML = renderProfilePage(u);
+  if(ui.tab==="comms") setTimeout(scrollCommsToBottom, 0);
 }
 function initials(name){ return name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase(); }
 
@@ -633,9 +646,8 @@ function renderHeadcount(u){
   let html = `
     <h1 class="pagetitle">Headcount Planning</h1>
     <p class="pagedesc">Compare approved capacity against current headcount by department and year.</p>
-    <div class="toolbar">
+    <div class="toolbar" style="margin-bottom:6px;">
       <span style="font-size:12.5px;color:var(--ink2);">Year</span>
-      ${years.map(y=>`<button class="tabsrow" style="display:inline-block;" onclick="ui.headcountYear=${y};render()"></button>`).join("")}
     </div>
     <div class="tabsrow">
       ${years.map(y=>`<button class="${ui.headcountYear===y?'active':''}" onclick="ui.headcountYear=${y};render()">${y}</button>`).join("")}
@@ -702,6 +714,62 @@ function renderDirectory(u){
       </table>
     </div>`;
   return html;
+}
+
+/* ---------------- Workforce Mix ---------------- */
+function barRow(label, value, max, extra){
+  const pct = max>0 ? Math.round((value/max)*100) : 0;
+  return `<div style="margin-bottom:10px;">
+    <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">
+      <span>${esc(label)}</span><b>${value}${extra?` <span style="color:var(--ink2);font-weight:400;">${extra}</span>`:""}</b>
+    </div>
+    <div style="background:var(--paper);border-radius:4px;height:8px;overflow:hidden;">
+      <div style="width:${pct}%;background:var(--red);height:100%;"></div>
+    </div>
+  </div>`;
+}
+function renderWorkforceMix(u){
+  const scoped = u.role==="Manager" ? state.employees.filter(e=>e.departmentId===u.departmentId) : state.employees;
+  const active = scoped.filter(e=>e.status==="Active");
+  const maxDept = Math.max(1, ...DEPARTMENTS.map(d=>scoped.filter(e=>e.departmentId===d.id && e.status==="Active").length));
+
+  const now = new Date();
+  const tenureYears = e => (now - new Date(e.joinDate)) / (1000*60*60*24*365.25);
+  const bands = [
+    { label:"< 1 year", test:y=>y<1 },
+    { label:"1–3 years", test:y=>y>=1 && y<3 },
+    { label:"3–7 years", test:y=>y>=3 && y<7 },
+    { label:"7+ years", test:y=>y>=7 },
+  ].map(b=>({ ...b, count: active.filter(e=>b.test(tenureYears(e))).length }));
+  const maxBand = Math.max(1, ...bands.map(b=>b.count));
+
+  const statusCounts = EMP_STATUSES.map(s=>({ status:s, count: scoped.filter(e=>e.status===s).length }));
+
+  return `
+    <h1 class="pagetitle">Workforce Mix</h1>
+    <p class="pagedesc">${u.role==="Manager"?"Your department's":"Current"} employees broken down by business unit, tenure, and status.</p>
+    <div class="kpis">
+      ${kpi("Total Employees", scoped.length, "")}
+      ${kpi("Active", active.length, "good")}
+      ${kpi("On Leave", scoped.filter(e=>e.status==="On Leave").length, "warn")}
+      ${kpi("Departed (Resigned/Terminated)", scoped.filter(e=>e.status==="Resigned"||e.status==="Terminated").length, "bad")}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <div class="card">
+        <h3 style="font-size:13.5px;margin:0 0 10px;">Headcount by department</h3>
+        ${DEPARTMENTS.map(d=>barRow(d.name, scoped.filter(e=>e.departmentId===d.id && e.status==="Active").length, maxDept)).join("")}
+      </div>
+      <div class="card">
+        <h3 style="font-size:13.5px;margin:0 0 10px;">Tenure bands (active employees)</h3>
+        ${bands.map(b=>barRow(b.label, b.count, maxBand)).join("")}
+      </div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;margin-top:14px;">
+      <table>
+        <tr><th>Status</th><th>Employees</th><th>Share</th></tr>
+        ${statusCounts.map(s=>`<tr><td>${esc(s.status)}</td><td>${s.count}</td><td>${scoped.length?Math.round(s.count/scoped.length*100):0}%</td></tr>`).join("")}
+      </table>
+    </div>`;
 }
 
 /* ---------------- Requests & Approvals ---------------- */
@@ -825,11 +893,222 @@ function confirmDecision(btn){
   const u = currentUser();
   notify(r.requesterId, `${r.requestType} request ${r.id} was ${rm.decision.toLowerCase().replace("_"," ")} by ${u.name}.`, r.id);
   addAudit(`${rm.decision==="APPROVED"?"Approved":rm.decision==="REJECTED"?"Rejected":"Sent back"} request ${r.id}`, "Request", {recordId:r.id});
+  const verb = rm.decision==="APPROVED"?"approved":rm.decision==="REJECTED"?"rejected":"sent back";
+  postSystemMessage(r.id, u, r.requesterId, r.requesterName,
+    `${verb.charAt(0).toUpperCase()+verb.slice(1)} ${r.id} (${r.requestType}).${reason?` "${reason}"`:""}`);
   ui.reasonModal = null;
   overlay.remove();
   ui.openRequestId = null;
   render();
   toast(rm.decision==="APPROVED" ? "Request approved successfully." : rm.decision==="REJECTED" ? "Request rejected." : "Request sent back.", "ok");
+}
+
+/* ---------------- Communication Center ---------------- */
+function postSystemMessage(requestId, fromUser, toId, toName, text){
+  state.messages.push({
+    id: uid("m"), requestId, fromId: fromUser.id, fromName: fromUser.name,
+    toId, toName, text, timestamp: nowStamp(), system: true,
+  });
+}
+function commThreadsFor(u){
+  const mine = state.messages.filter(m=>m.fromId===u.id || m.toId===u.id);
+  const byPerson = {};
+  mine.forEach(m=>{
+    const otherId = m.fromId===u.id ? m.toId : m.fromId;
+    const otherName = m.fromId===u.id ? m.toName : m.fromName;
+    if(!byPerson[otherId]) byPerson[otherId] = { id:otherId, name:otherName, messages:[] };
+    byPerson[otherId].messages.push(m);
+  });
+  return Object.values(byPerson).sort((a,b)=>{
+    const at = a.messages[a.messages.length-1].timestamp, bt = b.messages[b.messages.length-1].timestamp;
+    return at < bt ? 1 : -1;
+  });
+}
+function renderComms(u){
+  const threads = commThreadsFor(u);
+  if(!ui.commsThread && threads.length) ui.commsThread = threads[0].id;
+  const active = threads.find(t=>t.id===ui.commsThread);
+  return `
+    <h1 class="pagetitle">Communication Center</h1>
+    <p class="pagedesc">Messages tied to requests and employees — every approval, rejection, and send-back posts here automatically.</p>
+    <div class="card" style="padding:0;overflow:hidden;display:flex;height:460px;">
+      <div style="width:220px;border-right:1px solid var(--line);overflow-y:auto;">
+        ${threads.length===0 ? `<div style="padding:16px;font-size:12px;color:var(--ink2);">No conversations yet.</div>` :
+          threads.map(t=>`
+            <div onclick="ui.commsThread='${t.id}';render()" style="padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer;background:${ui.commsThread===t.id?'var(--red-tint)':'#fff'};">
+              <div style="font-weight:700;font-size:12.5px;">${esc(t.name)}</div>
+              <div style="font-size:11px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(t.messages[t.messages.length-1].text)}</div>
+            </div>`).join("")}
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;">
+        ${!active ? `<div class="empty" style="border:none;margin:auto;">Select a conversation.</div>` : `
+          <div style="padding:12px 16px;border-bottom:1px solid var(--line);font-weight:700;font-size:13px;">${esc(active.name)}</div>
+          <div id="commsScroll" style="flex:1;overflow-y:auto;padding:14px 16px;">
+            ${active.messages.map(m=>`
+              <div style="margin-bottom:10px;display:flex;${m.fromId===u.id?'justify-content:flex-end;':''}">
+                <div style="max-width:75%;background:${m.fromId===u.id?'var(--red)':'var(--paper)'};color:${m.fromId===u.id?'#fff':'var(--ink)'};padding:8px 12px;border-radius:8px;font-size:12.5px;">
+                  ${esc(m.text)}
+                  <div style="font-size:10px;opacity:.75;margin-top:3px;">${esc(m.timestamp)}</div>
+                </div>
+              </div>`).join("")}
+          </div>
+          <div style="border-top:1px solid var(--line);padding:10px;display:flex;gap:8px;">
+            <input class="field" id="commsInput" style="margin-bottom:0;flex:1;" placeholder="Type a message..." value="${esc(ui.commsDraft)}" oninput="ui.commsDraft=this.value" onkeydown="if(event.key==='Enter')sendCommMessage()">
+            <button class="btn-primary" style="width:auto;padding:9px 16px;" onclick="sendCommMessage()">Send</button>
+          </div>`}
+      </div>
+    </div>`;
+}
+function sendCommMessage(){
+  const text = (ui.commsDraft||"").trim();
+  if(!text || !ui.commsThread) return;
+  const u = currentUser();
+  const threads = commThreadsFor(u);
+  const t = threads.find(x=>x.id===ui.commsThread);
+  if(!t) return;
+  const anyMsg = t.messages[0];
+  const requestId = anyMsg ? anyMsg.requestId : null;
+  state.messages.push({ id:uid("m"), requestId, fromId:u.id, fromName:u.name, toId:t.id, toName:t.name, text, timestamp:nowStamp(), system:false });
+  ui.commsDraft = "";
+  render();
+}
+function scrollCommsToBottom(){
+  const el = document.getElementById("commsScroll");
+  if(el) el.scrollTop = el.scrollHeight;
+}
+
+/* ---------------- Analytics ---------------- */
+function renderAnalytics(u){
+  const maxDept = Math.max(1, ...DEPARTMENTS.map(d=>state.employees.filter(e=>e.departmentId===d.id && e.status==="Active").length));
+  const statusOrder = ["PENDING_APPROVAL","APPROVED","REJECTED","SENT_BACK"];
+  const maxStatus = Math.max(1, ...statusOrder.map(s=>state.requests.filter(r=>r.status===s).length));
+  const avgDays = (()=>{
+    const done = state.requests.filter(r=>r.status==="APPROVED" && r.approvalDate);
+    return done.length ? "1–2" : "—";
+  })();
+  return `
+    <h1 class="pagetitle">Analytics</h1>
+    <p class="pagedesc">Organization-wide trends, built from the same directory and request data used everywhere else in the system.</p>
+    <div class="kpis">
+      ${kpi("Total Requests", state.requests.length, "")}
+      ${kpi("Approved", state.requests.filter(r=>r.status==="APPROVED").length, "good")}
+      ${kpi("Pending Approval", state.requests.filter(r=>r.status==="PENDING_APPROVAL").length, "warn")}
+      ${kpi("Avg. Days to Decision", avgDays, "")}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <div class="card">
+        <h3 style="font-size:13.5px;margin:0 0 10px;">Employees by business unit</h3>
+        ${DEPARTMENTS.map(d=>barRow(d.name, state.employees.filter(e=>e.departmentId===d.id && e.status==="Active").length, maxDept)).join("")}
+      </div>
+      <div class="card">
+        <h3 style="font-size:13.5px;margin:0 0 10px;">Requests by status</h3>
+        ${statusOrder.map(s=>barRow(statusPillLabel(s), state.requests.filter(r=>r.status===s).length, maxStatus)).join("")}
+      </div>
+    </div>`;
+}
+function statusPillLabel(status){
+  return { PENDING_APPROVAL:"Pending approval", APPROVED:"Approved", REJECTED:"Rejected", SENT_BACK:"Sent back" }[status] || status;
+}
+
+/* ---------------- Data Management (import center) ---------------- */
+function sampleCsv(){
+  return "full_name,corporate_email,business_unit,job_title,location,join_date\n"+
+    "Mariam Adel,mariam.adel@vodafone.eg,Customer Care,Care Specialist,Cairo Festival City Store,2025-02-10\n"+
+    "Khaled Younis,khaled.younis@vodafone.eg,Retail Operations,Retail Associate,City Stars Store,2025-04-01\n"+
+    "invalid person,not-an-email,Finance,Financial Analyst,Smart Village HQ,2025-01-15\n"+
+    "Ahmed Hassan,ahmed.hassan@vodafone.eg,Retail Operations,Retail Associate,Smart Village HQ,2025-05-20";
+}
+function parseCsv(raw){
+  const lines = raw.split(/\r?\n/).filter(l=>l.trim().length);
+  if(!lines.length) return [];
+  const headers = lines[0].split(",").map(h=>h.trim());
+  return lines.slice(1).map(line=>{
+    const cells = line.split(",").map(c=>c.trim());
+    const row = {};
+    headers.forEach((h,i)=>row[h]=cells[i]||"");
+    return row;
+  });
+}
+function validateImportRows(rows){
+  return rows.map(row=>{
+    const errors = [];
+    if(!row.full_name) errors.push("Missing name");
+    if(!validateEmail(row.corporate_email)) errors.push("Invalid corporate email format");
+    if(state.employees.some(e=>e.email.toLowerCase()===String(row.corporate_email).toLowerCase())) errors.push("Duplicate — already in directory");
+    const dept = DEPARTMENTS.find(d=>d.name===row.business_unit);
+    if(!dept) errors.push("Unknown business unit");
+    return { ...row, _errors: errors, _valid: errors.length===0, _dept: dept };
+  });
+}
+function renderDataMgmt(u){
+  let html = `
+    <h1 class="pagetitle">Data Management</h1>
+    <p class="pagedesc">Bulk-import employee records instead of retyping a spreadsheet by hand. Every row is validated before anything is written to the live directory.</p>`;
+
+  if(ui.importStep==="select"){
+    html += `
+      <div class="card">
+        <label class="lbl">Paste CSV data</label>
+        <p class="hint" style="margin-top:0;">Columns: full_name, corporate_email, business_unit, job_title, location, join_date</p>
+        <textarea class="field" id="import_raw" style="min-height:160px;font-family:monospace;font-size:12px;" placeholder="full_name,corporate_email,business_unit,job_title,location,join_date">${esc(ui.importRaw)}</textarea>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-primary" style="width:auto;padding:9px 16px;" onclick="loadSampleImport()">Use sample data</button>
+          <button class="btn-primary" style="width:auto;padding:9px 16px;" onclick="inspectImport()">Inspect &amp; validate</button>
+        </div>
+      </div>`;
+  } else if(ui.importStep==="review"){
+    const rows = ui.importRows || [];
+    const validCount = rows.filter(r=>r._valid).length;
+    html += `
+      <div class="card" style="${validCount<rows.length?'background:var(--amber-tint);':'background:var(--green-tint);'}">
+        <b>Validation completed.</b> ${validCount} of ${rows.length} rows are ready to import${rows.length-validCount>0?`, ${rows.length-validCount} need attention`:""}.
+      </div>
+      <div class="card" style="padding:0;overflow:hidden;">
+        <table>
+          <tr><th>Name</th><th>Email</th><th>Business Unit</th><th>Status</th></tr>
+          ${rows.map(r=>`
+            <tr>
+              <td>${esc(r.full_name)}</td><td>${esc(r.corporate_email)}</td><td>${esc(r.business_unit)}</td>
+              <td>${r._valid ? `<span class="pill good">Ready</span>` : `<span class="pill bad">${esc(r._errors.join("; "))}</span>`}</td>
+            </tr>`).join("")}
+        </table>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-primary" style="width:auto;padding:9px 16px;background:#fff;color:var(--ink);border:1px solid var(--line);" onclick="ui.importStep='select';render()">Back</button>
+        <button class="btn-primary" style="width:auto;padding:9px 16px;" ${validCount===0?"disabled":""} onclick="commitImport()">Import ${validCount} valid row${validCount===1?"":"s"}</button>
+      </div>`;
+  } else if(ui.importStep==="done"){
+    html += `<div class="card" style="background:var(--green-tint);"><b>Import complete.</b> ${ui.importLastResult||""}</div>
+      <button class="btn-primary" style="width:auto;padding:9px 16px;" onclick="ui.importStep='select';ui.importRaw='';ui.importRows=null;render()">Import more records</button>`;
+  }
+  return html;
+}
+function loadSampleImport(){ ui.importRaw = sampleCsv(); render(); }
+function inspectImport(){
+  const raw = document.getElementById("import_raw").value;
+  const rows = parseCsv(raw);
+  if(!rows.length){ toast("Paste at least one data row first.", "err"); return; }
+  ui.importRaw = raw;
+  ui.importRows = validateImportRows(rows);
+  ui.importStep = "review";
+  render();
+}
+function commitImport(){
+  const rows = (ui.importRows||[]).filter(r=>r._valid);
+  rows.forEach(row=>{
+    const emp = {
+      id: uid("e"), empId: "VF-"+(3000+Math.floor(Math.random()*900)), name: row.full_name,
+      email: row.corporate_email.toLowerCase(), phone: "",
+      jobTitle: row.job_title || "—", department: row._dept.name, departmentId: row._dept.id, businessUnit: row._dept.bu,
+      location: row.location || LOCATIONS[0], status:"Active", joinDate: row.join_date || new Date().toISOString().slice(0,10), leaveDate:null,
+    };
+    state.employees.push(emp);
+  });
+  addAudit(`Imported ${rows.length} employee record(s) from bulk upload`, "Import", {recordId: uid("imp")});
+  ui.importLastResult = `${rows.length} record(s) added to the People Directory.`;
+  ui.importStep = "done";
+  render();
+  toast(`Imported ${rows.length} record(s).`, "ok");
 }
 
 /* ---------------- Audit Log ---------------- */
@@ -1047,6 +1326,8 @@ function submitNewRequest(){
   state.requests.unshift(req);
   notify(approver.id, `New ${type} request ${req.id} requires your approval.`, req.id);
   addAudit(`Submitted ${type} request ${req.id}`, "Request", {recordId:req.id});
+  postSystemMessage(req.id, u, approver.id, approver.name,
+    `Submitted ${req.id} (${type}, ${deptName}).${comments?` "${comments}"`:""}`);
   ui.modal = null;
   ui.headcountOpenDept = null;
   render();
